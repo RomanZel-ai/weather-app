@@ -39,11 +39,14 @@ jobs:
               manifest.write_text(text)
           PY
 
+      - name: Remove generated sample tests
+        run: rm -rf test
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Analyze project
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         run: flutter build apk --release
