@@ -22,7 +22,7 @@ jobs:
           cache: true
 
       - name: Create platform files if missing
-        run: flutter create . --platforms=android
+        run: flutter create . --platforms=android --project-name weather_flutter_app
 
       - name: Add Android internet permission
         run: |
