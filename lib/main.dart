@@ -87,6 +87,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
       if (!serviceEnabled) {
         throw const WeatherApiException(
           'Геолокация выключена. Включи GPS и попробуй ещё раз.',
@@ -140,7 +141,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     }
   }
 
-
+  Future<void> _toggleFavorite(String city) async {
     final nextFavorites = List<String>.from(_favoriteCities);
     final existingIndex = nextFavorites.indexWhere(
       (item) => item.toLowerCase() == city.toLowerCase(),
@@ -289,14 +290,14 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      _SectionTitle(
+                      const _SectionTitle(
                         title: 'Ближайшие 24 часа',
                         subtitle: 'Температура и вероятность осадков',
                       ),
                       const SizedBox(height: 12),
                       HourlyForecastStrip(items: report.hourly),
                       const SizedBox(height: 24),
-                      _SectionTitle(
+                      const _SectionTitle(
                         title: 'Прогноз на 3 дня',
                         subtitle: 'Максимум / минимум и риск осадков',
                       ),
@@ -314,7 +315,6 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
   }
 }
 
-
 String _friendlyError(Object? error) {
   final text = error.toString();
 
@@ -325,8 +325,7 @@ String _friendlyError(Object? error) {
     return 'Проверь интернет и попробуй ещё раз. Иногда погодный источник отвечает медленно.';
   }
 
-  if (text.contains('Город не найден') ||
-      text.contains('Введите город')) {
+  if (text.contains('Город не найден') || text.contains('Введите город')) {
     return 'Не нашёл такой город. Попробуй написать название по-русски или по-английски.';
   }
 
@@ -446,7 +445,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -505,7 +503,6 @@ class _LoadingState extends StatelessWidget {
     );
   }
 }
-
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({
