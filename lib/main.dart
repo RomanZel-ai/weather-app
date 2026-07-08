@@ -6,6 +6,7 @@ import 'services/favorite_cities_store.dart';
 import 'services/weather_api.dart';
 import 'widgets/forecast_card.dart';
 import 'widgets/hourly_forecast_strip.dart';
+import 'widgets/temperature_chart.dart';
 import 'widgets/weather_header.dart';
 
 void main() {
@@ -102,6 +103,9 @@ class WeatherHomePage extends StatefulWidget {
 }
 
 class _WeatherHomePageState extends State<WeatherHomePage> {
+  static const _lastCityKey = 'last_city';
+  static const _lastSourceKey = 'last_source';
+
   final _api = WeatherApi();
   final _favoriteStore = FavoriteCitiesStore();
   final _searchController = TextEditingController(text: 'Москва');
@@ -115,8 +119,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
   @override
   void initState() {
     super.initState();
-    _loadFavorites();
-    _loadWeather(_activeCity);
+    _bootstrap();
   }
 
   @override
@@ -125,16 +128,32 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     super.dispose();
   }
 
-  Future<void> _loadFavorites() async {
+  Future<void> _bootstrap() async {
+    final preferences = await SharedPreferences.getInstance();
     final favorites = await _favoriteStore.load();
+    final lastSource = preferences.getString(_lastSourceKey) ?? 'city';
+    final lastCity = preferences.getString(_lastCityKey) ?? 'Москва';
+
     if (!mounted) return;
 
     setState(() {
       _favoriteCities = favorites;
     });
+
+    if (lastSource == 'nearby') {
+      await _loadNearbyWeather(saveSelection: false);
+    } else {
+      _loadWeather(lastCity, saveSelection: false);
+    }
   }
 
-  void _loadWeather(String city) {
+  Future<void> _saveLastSelection(String source, String city) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_lastSourceKey, source);
+    await preferences.setString(_lastCityKey, city);
+  }
+
+  void _loadWeather(String city, {bool saveSelection = true}) {
     final trimmedCity = city.trim();
     if (trimmedCity.isEmpty) return;
 
@@ -144,9 +163,13 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
       _weatherFuture = _api.fetchWeatherByCity(trimmedCity);
       _selectedIndex = 0;
     });
+
+    if (saveSelection) {
+      _saveLastSelection('city', trimmedCity);
+    }
   }
 
-  Future<void> _loadNearbyWeather() async {
+  Future<void> _loadNearbyWeather({bool saveSelection = true}) async {
     setState(() {
       _isLocating = true;
       _activeCity = 'Погода рядом';
@@ -154,6 +177,10 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
       _weatherFuture = _api.fetchWeatherNearby();
       _selectedIndex = 0;
     });
+
+    if (saveSelection) {
+      await _saveLastSelection('nearby', 'Погода рядом');
+    }
 
     try {
       await _weatherFuture;
@@ -439,11 +466,15 @@ class _TodayTab extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _AdviceCard(report: report),
+              const SizedBox(height: 16),
+              _SmartAlertsSection(report: report),
               const SizedBox(height: 24),
               const _SectionTitle(
                 title: 'Ближайшие 24 часа',
                 subtitle: 'Температура и вероятность осадков',
               ),
+              const SizedBox(height: 12),
+              TemperatureChart(items: report.hourly),
               const SizedBox(height: 12),
               HourlyForecastStrip(items: report.hourly),
             ]),
@@ -499,14 +530,151 @@ class _ForecastTab extends StatelessWidget {
             delegate: SliverChildListDelegate([
               const _SectionTitle(
                 title: 'Прогноз на 3 дня',
-                subtitle: 'Максимум / минимум и риск осадков',
+                subtitle: 'Нажми на день, чтобы увидеть детали',
               ),
               const SizedBox(height: 12),
-              ...report.daily.map((day) => ForecastCard(forecast: day)),
+              ...report.daily.map(
+                (day) => ForecastCard(
+                  forecast: day,
+                  showChevron: true,
+                  onTap: () => _showDayDetails(context, report, day),
+                ),
+              ),
             ]),
           ),
         );
       },
+    );
+  }
+
+  void _showDayDetails(
+    BuildContext context,
+    WeatherReport report,
+    DailyForecast day,
+  ) {
+    final hours = report.hourly.where((hour) {
+      return _sameDate(hour.time, day.date);
+    }).toList();
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return _DayDetailsSheet(day: day, hours: hours);
+      },
+    );
+  }
+
+  bool _sameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _DayDetailsSheet extends StatelessWidget {
+  const _DayDetailsSheet({
+    required this.day,
+    required this.hours,
+  });
+
+  final DailyForecast day;
+  final List<HourlyForecast> hours;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom + 18;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 4, 20, bottomPadding),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionTitle(
+                title: _dayTitle(day.date),
+                subtitle: '${weatherDescription(day.weatherCode)} · осадки до ${day.precipitationProbability}%',
+              ),
+              const SizedBox(height: 14),
+              ForecastCard(forecast: day),
+              const SizedBox(height: 10),
+              _PartTile(title: 'Ночь', emoji: '🌙', hours: _partHours(0, 6)),
+              _PartTile(title: 'Утро', emoji: '🌅', hours: _partHours(6, 12)),
+              _PartTile(title: 'День', emoji: '☀️', hours: _partHours(12, 18)),
+              _PartTile(title: 'Вечер', emoji: '🌆', hours: _partHours(18, 24)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<HourlyForecast> _partHours(int from, int to) {
+    return hours.where((hour) => hour.time.hour >= from && hour.time.hour < to).toList();
+  }
+
+  String _dayTitle(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+
+    if (target == today) return 'Детали на сегодня';
+    if (target == today.add(const Duration(days: 1))) return 'Детали на завтра';
+
+    const weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+    return weekdays[date.weekday - 1];
+  }
+}
+
+class _PartTile extends StatelessWidget {
+  const _PartTile({
+    required this.title,
+    required this.emoji,
+    required this.hours,
+  });
+
+  final String title;
+  final String emoji;
+  final List<HourlyForecast> hours;
+
+  @override
+  Widget build(BuildContext context) {
+    final mutedColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.58);
+
+    if (hours.isEmpty) {
+      return Card(
+        elevation: 0,
+        child: ListTile(
+          leading: CircleAvatar(child: Text(emoji)),
+          title: Text(title),
+          subtitle: const Text('Нет данных'),
+        ),
+      );
+    }
+
+    final avgTemp = hours.map((hour) => hour.temperature).reduce((a, b) => a + b) / hours.length;
+    final maxRain = hours.map((hour) => hour.precipitationProbability).reduce((a, b) => a > b ? a : b);
+    final code = hours[hours.length ~/ 2].weatherCode;
+
+    return Card(
+      elevation: 0,
+      child: ListTile(
+        leading: CircleAvatar(child: Text(emoji)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          '${weatherDescription(code)} · осадки до $maxRain%',
+          style: TextStyle(color: mutedColor),
+        ),
+        trailing: Text(
+          '${avgTemp.round()}°',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+      ),
     );
   }
 }
@@ -541,39 +709,46 @@ class _FavoritesTab extends StatelessWidget {
 
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-      sliver: SliverList.separated(
-        itemCount: cities.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return const _SectionTitle(
-              title: 'Избранные города',
-              subtitle: 'Быстрый доступ к нужным прогнозам',
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index == 0) {
+              return const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: _SectionTitle(
+                  title: 'Избранные города',
+                  subtitle: 'Быстрый доступ к нужным прогнозам',
+                ),
+              );
+            }
+
+            final city = cities[index - 1];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Card(
+                elevation: 0,
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.location_city_rounded),
+                  ),
+                  title: Text(
+                    city,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: const Text('Открыть прогноз'),
+                  onTap: () => onCityPressed(city),
+                  trailing: IconButton(
+                    tooltip: 'Удалить',
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    onPressed: () => onRemoveCity(city),
+                  ),
+                ),
+              ),
             );
-          }
-
-          final city = cities[index - 1];
-
-          return Card(
-            elevation: 0,
-            child: ListTile(
-              leading: const CircleAvatar(
-                child: Icon(Icons.location_city_rounded),
-              ),
-              title: Text(
-                city,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: const Text('Открыть прогноз'),
-              onTap: () => onCityPressed(city),
-              trailing: IconButton(
-                tooltip: 'Удалить',
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () => onRemoveCity(city),
-              ),
-            ),
-          );
-        },
+          },
+          childCount: cities.length + 1,
+        ),
       ),
     );
   }
@@ -634,34 +809,51 @@ class _SettingsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            child: ListTile(
-              leading: const CircleAvatar(
-                child: Icon(Icons.cloud_queue_rounded),
-              ),
-              title: const Text(
-                'Источник погоды',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: const Text('wttr.in — работает без VPN'),
-            ),
+          const _InfoCard(
+            icon: Icons.notifications_active_outlined,
+            title: 'Умные уведомления',
+            subtitle: 'Пока внутри приложения: дождь, ветер, холод и жара',
           ),
           const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            child: ListTile(
-              leading: const CircleAvatar(
-                child: Icon(Icons.info_outline_rounded),
-              ),
-              title: const Text(
-                'WeatherAI v1.3',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: const Text('Нижняя навигация, избранное и настройки'),
-            ),
+          const _InfoCard(
+            icon: Icons.cloud_queue_rounded,
+            title: 'Источник погоды',
+            subtitle: 'wttr.in — работает без VPN',
+          ),
+          const SizedBox(height: 12),
+          const _InfoCard(
+            icon: Icons.info_outline_rounded,
+            title: 'WeatherAI v1.4',
+            subtitle: 'Последний город, график, уведомления и детали дня',
           ),
         ]),
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      child: ListTile(
+        leading: CircleAvatar(child: Icon(icon)),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(subtitle),
       ),
     );
   }
@@ -739,6 +931,133 @@ class _AdviceCard extends StatelessWidget {
 
     return const _Advice('👌', 'Погода выглядит спокойной. День без сюрпризов.');
   }
+}
+
+class _SmartAlertsSection extends StatelessWidget {
+  const _SmartAlertsSection({required this.report});
+
+  final WeatherReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final alerts = _buildAlerts(report);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'Умные уведомления',
+          subtitle: 'Важное по погоде на ближайшее время',
+        ),
+        const SizedBox(height: 12),
+        ...alerts.map((alert) => _AlertCard(alert: alert)),
+      ],
+    );
+  }
+
+  List<_WeatherAlert> _buildAlerts(WeatherReport report) {
+    final alerts = <_WeatherAlert>[];
+    final current = report.current;
+    final today = report.daily.isNotEmpty ? report.daily.first : null;
+    final tomorrow = report.daily.length > 1 ? report.daily[1] : null;
+
+    final rain = today?.precipitationProbability ?? 0;
+
+    if (rain >= 65) {
+      alerts.add(
+        const _WeatherAlert(
+          '☔',
+          'Высокий риск дождя',
+          'Зонт сегодня лучше взять с собой.',
+        ),
+      );
+    }
+
+    if (current.windSpeed >= 10) {
+      alerts.add(
+        const _WeatherAlert(
+          '💨',
+          'Сильный ветер',
+          'Будь аккуратнее на улице и с лёгкими вещами.',
+        ),
+      );
+    }
+
+    if (current.temperature <= 0) {
+      alerts.add(
+        const _WeatherAlert(
+          '🥶',
+          'Холодно',
+          'Лучше одеться теплее, особенно утром и вечером.',
+        ),
+      );
+    }
+
+    if (current.temperature >= 27) {
+      alerts.add(
+        const _WeatherAlert(
+          '🥵',
+          'Жарко',
+          'Пей воду и избегай долгого солнца.',
+        ),
+      );
+    }
+
+    if (today != null && tomorrow != null) {
+      final drop = today.maxTemperature - tomorrow.maxTemperature;
+      if (drop >= 5) {
+        alerts.add(
+          _WeatherAlert(
+            '📉',
+            'Завтра похолодает',
+            'Максимальная температура ниже примерно на ${drop.round()}°.',
+          ),
+        );
+      }
+    }
+
+    if (alerts.isEmpty) {
+      alerts.add(
+        const _WeatherAlert(
+          '✅',
+          'Без погодных тревог',
+          'Пока ничего критичного не видно.',
+        ),
+      );
+    }
+
+    return alerts;
+  }
+}
+
+class _AlertCard extends StatelessWidget {
+  const _AlertCard({required this.alert});
+
+  final _WeatherAlert alert;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        leading: CircleAvatar(child: Text(alert.emoji)),
+        title: Text(
+          alert.title,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(alert.text),
+      ),
+    );
+  }
+}
+
+class _WeatherAlert {
+  const _WeatherAlert(this.emoji, this.title, this.text);
+
+  final String emoji;
+  final String title;
+  final String text;
 }
 
 class _Advice {
