@@ -212,7 +212,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                       HourlyForecastStrip(items: report.hourly),
                       const SizedBox(height: 24),
                       _SectionTitle(
-                        title: 'Прогноз на 14 дней',
+                        title: 'Прогноз на 3 дня',
                         subtitle: 'Максимум / минимум и риск осадков',
                       ),
                       const SizedBox(height: 12),

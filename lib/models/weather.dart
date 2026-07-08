@@ -132,24 +132,48 @@ class WeatherReport {
 }
 
 String weatherDescription(int code) {
-  if (code == 0) return 'Ясно';
-  if (code == 1 || code == 2 || code == 3) return 'Переменная облачность';
-  if (code == 45 || code == 48) return 'Туман';
-  if (code >= 51 && code <= 57) return 'Морось';
-  if (code >= 61 && code <= 67) return 'Дождь';
-  if (code >= 71 && code <= 77) return 'Снег';
-  if (code >= 80 && code <= 82) return 'Ливень';
-  if (code == 85 || code == 86) return 'Снегопад';
+  if (code == 0 || code == 113) return 'Ясно';
+  if (code == 1 || code == 2 || code == 3 || code == 116) {
+    return 'Переменная облачность';
+  }
+  if (code == 119) return 'Облачно';
+  if (code == 122) return 'Пасмурно';
+  if (code == 45 || code == 48 || code == 143 || code == 248 || code == 260) {
+    return 'Туман';
+  }
+  if ([176, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 353, 356, 359].contains(code)) {
+    return 'Дождь';
+  }
+  if ([179, 182, 185, 227, 230, 317, 320, 323, 326, 329, 332, 335, 338, 368, 371].contains(code)) {
+    return 'Снег';
+  }
+  if ([200, 386, 389, 392, 395].contains(code)) return 'Гроза';
+
+  if (code >= 51 && code <= 67) return 'Дождь';
+  if (code >= 71 && code <= 86) return 'Снег';
   if (code >= 95 && code <= 99) return 'Гроза';
+
   return 'Погода';
 }
 
 String weatherEmoji(int code) {
-  if (code == 0) return '☀️';
-  if (code == 1 || code == 2 || code == 3) return '⛅';
-  if (code == 45 || code == 48) return '🌫️';
+  if (code == 0 || code == 113) return '☀️';
+  if (code == 1 || code == 2 || code == 3 || code == 116) return '⛅';
+  if (code == 119 || code == 122) return '☁️';
+  if (code == 45 || code == 48 || code == 143 || code == 248 || code == 260) {
+    return '🌫️';
+  }
+  if ([176, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 353, 356, 359].contains(code)) {
+    return '🌧️';
+  }
+  if ([179, 182, 185, 227, 230, 317, 320, 323, 326, 329, 332, 335, 338, 368, 371].contains(code)) {
+    return '❄️';
+  }
+  if ([200, 386, 389, 392, 395].contains(code)) return '⛈️';
+
   if (code >= 51 && code <= 67) return '🌧️';
   if (code >= 71 && code <= 86) return '❄️';
   if (code >= 95 && code <= 99) return '⛈️';
+
   return '🌡️';
 }
