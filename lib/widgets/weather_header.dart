@@ -24,11 +24,14 @@ class WeatherHeader extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1976D2), Color(0xFF64B5F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: _gradientForCode(current.weatherCode),
+        boxShadow: [
+          BoxShadow(
+            color: _shadowColorForCode(current.weatherCode),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,6 +108,97 @@ class WeatherHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  LinearGradient _gradientForCode(int code) {
+    final isRain = [
+      176,
+      263,
+      266,
+      281,
+      284,
+      293,
+      296,
+      299,
+      302,
+      305,
+      308,
+      311,
+      314,
+      353,
+      356,
+      359,
+    ].contains(code);
+
+    final isSnow = [
+      179,
+      182,
+      185,
+      227,
+      230,
+      317,
+      320,
+      323,
+      326,
+      329,
+      332,
+      335,
+      338,
+      368,
+      371,
+    ].contains(code);
+
+    final isThunder = [200, 386, 389, 392, 395].contains(code);
+
+    if (isThunder) {
+      return const LinearGradient(
+        colors: [Color(0xFF263238), Color(0xFF5C6BC0)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+
+    if (isRain) {
+      return const LinearGradient(
+        colors: [Color(0xFF1565C0), Color(0xFF455A64)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+
+    if (isSnow) {
+      return const LinearGradient(
+        colors: [Color(0xFF90CAF9), Color(0xFF5E92F3)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+
+    if (code == 119 || code == 122) {
+      return const LinearGradient(
+        colors: [Color(0xFF607D8B), Color(0xFF90A4AE)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+
+    return const LinearGradient(
+      colors: [Color(0xFF1976D2), Color(0xFF64B5F6)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
+  Color _shadowColorForCode(int code) {
+    if ([200, 386, 389, 392, 395].contains(code)) {
+      return const Color(0xFF263238).withOpacity(0.25);
+    }
+
+    if (code == 119 || code == 122) {
+      return const Color(0xFF607D8B).withOpacity(0.22);
+    }
+
+    return const Color(0xFF1976D2).withOpacity(0.22);
   }
 }
 
