@@ -130,7 +130,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Погода, которая не заставляет гадать',
+                                'Прогноз без VPN и лишней суеты',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
@@ -170,7 +170,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SliverFillRemaining(
                     hasScrollBody: false,
-                    child: Center(child: CircularProgressIndicator()),
+                    child: _LoadingState(),
                   );
                 }
 
@@ -178,7 +178,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                   return SliverFillRemaining(
                     hasScrollBody: false,
                     child: _ErrorState(
-                      message: snapshot.error.toString(),
+                      message: _friendlyError(snapshot.error),
                       onRetry: () => _loadWeather(_searchController.text),
                     ),
                   );
@@ -227,6 +227,25 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
       ),
     );
   }
+}
+
+
+String _friendlyError(Object? error) {
+  final text = error.toString();
+
+  if (text.contains('SocketException') ||
+      text.contains('Failed host lookup') ||
+      text.contains('Connection') ||
+      text.contains('TimeoutException')) {
+    return 'Проверь интернет и попробуй ещё раз. Иногда погодный источник отвечает медленно.';
+  }
+
+  if (text.contains('Город не найден') ||
+      text.contains('Введите город')) {
+    return 'Не нашёл такой город. Попробуй написать название по-русски или по-английски.';
+  }
+
+  return text.replaceFirst('Exception: ', '');
 }
 
 class _SearchField extends StatelessWidget {
@@ -336,6 +355,67 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 104,
+            height: 104,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1976D2),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF1976D2).withOpacity(0.25),
+                  blurRadius: 26,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Text(
+                '☁️',
+                style: TextStyle(fontSize: 48),
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            'WeatherAI',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Загружаю свежий прогноз...',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.black.withOpacity(0.55),
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 22),
+          const SizedBox(
+            width: 34,
+            height: 34,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
 class _ErrorState extends StatelessWidget {
   const _ErrorState({
     required this.message,
@@ -352,7 +432,19 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 56, color: Colors.blueGrey),
+          Container(
+            width: 86,
+            height: 86,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: const Icon(
+              Icons.cloud_off_rounded,
+              size: 48,
+              color: Color(0xFF1976D2),
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             'Не получилось загрузить погоду',
@@ -368,9 +460,10 @@ class _ErrorState extends StatelessWidget {
             style: TextStyle(color: Colors.black.withOpacity(0.56)),
           ),
           const SizedBox(height: 18),
-          FilledButton(
+          FilledButton.icon(
             onPressed: onRetry,
-            child: const Text('Повторить'),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Повторить'),
           ),
         ],
       ),

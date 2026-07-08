@@ -22,21 +22,98 @@ jobs:
           cache: true
 
       - name: Create platform files if missing
-        run: flutter create . --platforms=android --project-name weather_flutter_app
+        run: flutter create --project-name weather_app --platforms=android .
 
       - name: Add Android internet permission
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text()
           permission = '<uses-permission android:name="android.permission.INTERNET" />'
+
           if permission not in text:
               text = text.replace(
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
                   '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    ' + permission,
               )
-              manifest.write_text(text)
+
+          text = text.replace('android:label="weather_app"', 'android:label="WeatherAI"')
+          text = text.replace('android:label="weather_flutter_app"', 'android:label="WeatherAI"')
+          text = text.replace('android:label="weather-app"', 'android:label="WeatherAI"')
+          manifest.write_text(text)
+          PY
+
+      - name: Customize Android branding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base = Path("android/app/src/main/res")
+          values = base / "values"
+          drawable = base / "drawable"
+          drawable_v21 = base / "drawable-v21"
+          mipmap_anydpi = base / "mipmap-anydpi-v26"
+
+          values.mkdir(parents=True, exist_ok=True)
+          drawable.mkdir(parents=True, exist_ok=True)
+          drawable_v21.mkdir(parents=True, exist_ok=True)
+          mipmap_anydpi.mkdir(parents=True, exist_ok=True)
+
+          (values / "colors.xml").write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="weather_ai_blue">#1976D2</color>
+              <color name="weather_ai_light">#E3F2FD</color>
+          </resources>
+          """)
+
+          icon_vector = """<?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#1976D2"
+                  android:pathData="M0,0h108v108h-108z"/>
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M35,67c-8,0 -15,-7 -15,-15c0,-8 7,-15 15,-15c2,0 4,0 6,1c4,-8 12,-14 22,-14c13,0 24,10 25,23c8,2 14,9 14,18c0,10 -8,18 -18,18h-49z"/>
+              <path
+                  android:fillColor="#BBDEFB"
+                  android:pathData="M32,78c5,5 13,8 22,8c10,0 19,-4 25,-11c-10,3 -23,4 -47,3z"/>
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M78,20a10,10 0,1 0,0.1 0M78,13v-7M78,34v7M65,20h-7M99,20h-7M68,10l-5,-5M93,35l-5,-5M88,10l5,-5M63,35l5,-5"/>
+          </vector>
+          """
+
+          (drawable / "ic_launcher_foreground.xml").write_text(icon_vector)
+
+          adaptive_icon = """<?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/weather_ai_blue" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          """
+
+          (mipmap_anydpi / "ic_launcher.xml").write_text(adaptive_icon)
+          (mipmap_anydpi / "ic_launcher_round.xml").write_text(adaptive_icon)
+
+          launch_background = """<?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@color/weather_ai_blue" />
+              <item
+                  android:width="96dp"
+                  android:height="96dp"
+                  android:gravity="center"
+                  android:drawable="@drawable/ic_launcher_foreground" />
+          </layer-list>
+          """
+
+          (drawable / "launch_background.xml").write_text(launch_background)
+          (drawable_v21 / "launch_background.xml").write_text(launch_background)
           PY
 
       - name: Remove generated sample tests
