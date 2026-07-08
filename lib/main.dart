@@ -105,6 +105,7 @@ class WeatherHomePage extends StatefulWidget {
 class _WeatherHomePageState extends State<WeatherHomePage> {
   static const _lastCityKey = 'last_city';
   static const _lastSourceKey = 'last_source';
+  static const _weatherSourceKey = 'weather_source';
 
   final _api = WeatherApi();
   final _favoriteStore = FavoriteCitiesStore();
@@ -113,6 +114,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
   Future<WeatherReport>? _weatherFuture;
   List<String> _favoriteCities = const ['Москва', 'Санкт-Петербург', 'Берлин'];
   String _activeCity = 'Москва';
+  WeatherSource _weatherSource = WeatherSource.wttr;
   bool _isLocating = false;
   int _selectedIndex = 0;
 
@@ -133,11 +135,18 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     final favorites = await _favoriteStore.load();
     final lastSource = preferences.getString(_lastSourceKey) ?? 'city';
     final lastCity = preferences.getString(_lastCityKey) ?? 'Москва';
+    final weatherSourceName =
+        preferences.getString(_weatherSourceKey) ?? WeatherSource.wttr.name;
+    final savedWeatherSource = WeatherSource.values.firstWhere(
+      (source) => source.name == weatherSourceName,
+      orElse: () => WeatherSource.wttr,
+    );
 
     if (!mounted) return;
 
     setState(() {
       _favoriteCities = favorites;
+      _weatherSource = savedWeatherSource;
     });
 
     if (lastSource == 'nearby') {
@@ -160,7 +169,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     setState(() {
       _activeCity = trimmedCity;
       _searchController.text = trimmedCity;
-      _weatherFuture = _api.fetchWeatherByCity(trimmedCity);
+      _weatherFuture = _api.fetchWeatherByCity(trimmedCity, source: _weatherSource);
       _selectedIndex = 0;
     });
 
@@ -174,7 +183,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
       _isLocating = true;
       _activeCity = 'Погода рядом';
       _searchController.text = 'Погода рядом';
-      _weatherFuture = _api.fetchWeatherNearby();
+      _weatherFuture = _api.fetchWeatherNearby(source: _weatherSource);
       _selectedIndex = 0;
     });
 
@@ -192,6 +201,19 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
         _isLocating = false;
       });
     }
+  }
+
+  Future<void> _setWeatherSource(WeatherSource source) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_weatherSourceKey, source.name);
+
+    if (!mounted) return;
+
+    setState(() {
+      _weatherSource = source;
+    });
+
+    _refresh();
   }
 
   Future<void> _toggleFavorite(String city) async {
@@ -261,6 +283,8 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
       _ => _SettingsTab(
           themeMode: widget.themeMode,
           onThemeModeChanged: widget.onThemeModeChanged,
+          weatherSource: _weatherSource,
+          onWeatherSourceChanged: _setWeatherSource,
         ),
     };
 
@@ -758,10 +782,14 @@ class _SettingsTab extends StatelessWidget {
   const _SettingsTab({
     required this.themeMode,
     required this.onThemeModeChanged,
+    required this.weatherSource,
+    required this.onWeatherSourceChanged,
   });
 
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final WeatherSource weatherSource;
+  final ValueChanged<WeatherSource> onWeatherSourceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -809,16 +837,46 @@ class _SettingsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          Card(
+            elevation: 0,
+            child: Column(
+              children: [
+                RadioListTile<WeatherSource>(
+                  value: WeatherSource.wttr,
+                  groupValue: weatherSource,
+                  onChanged: (value) {
+                    if (value != null) onWeatherSourceChanged(value);
+                  },
+                  title: const Text('wttr.in'),
+                  subtitle: const Text('Резервный источник, работает без VPN'),
+                  secondary: const Icon(Icons.cloud_queue_rounded),
+                ),
+                RadioListTile<WeatherSource>(
+                  value: WeatherSource.yandex,
+                  groupValue: weatherSource,
+                  onChanged: (value) {
+                    if (value != null) onWeatherSourceChanged(value);
+                  },
+                  title: const Text('Яндекс Погода'),
+                  subtitle: const Text('Основной источник, если ключ доступен'),
+                  secondary: const Icon(Icons.ac_unit_rounded),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           const _InfoCard(
             icon: Icons.notifications_active_outlined,
             title: 'Умные уведомления',
             subtitle: 'Пока внутри приложения: дождь, ветер, холод и жара',
           ),
           const SizedBox(height: 12),
-          const _InfoCard(
+          _InfoCard(
             icon: Icons.cloud_queue_rounded,
-            title: 'Источник погоды',
-            subtitle: 'wttr.in — работает без VPN',
+            title: 'Активный источник',
+            subtitle: weatherSource == WeatherSource.yandex
+                ? 'Яндекс Погода + fallback на wttr.in'
+                : 'wttr.in — работает без VPN',
           ),
           const SizedBox(height: 12),
           const _InfoCard(

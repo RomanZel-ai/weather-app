@@ -126,7 +126,7 @@ jobs:
         run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --dart-define=YANDEX_WEATHER_KEY="${{ secrets.YANDEX_WEATHER_KEY }}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
