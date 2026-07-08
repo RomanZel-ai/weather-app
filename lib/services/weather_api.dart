@@ -17,25 +17,19 @@ class WeatherApi {
   WeatherApi({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
-
-  Future<WeatherReport> fetchWeatherByLocation({
-    required double latitude,
-    required double longitude,
-  }) async {
-    final uri = Uri.parse(
-      'https://wttr.in/\${latitude.toStringAsFixed(4)},\${longitude.toStringAsFixed(4)}?format=j1&lang=ru',
-    );
+  Future<WeatherReport> fetchWeatherNearby() async {
+    final uri = Uri.parse('https://wttr.in/?format=j1&lang=ru');
 
     final response = await _client.get(uri).timeout(
           const Duration(seconds: 12),
         );
 
     if (response.statusCode != 200) {
-      throw const WeatherApiException('Не удалось загрузить прогноз по геолокации');
+      throw const WeatherApiException('Не удалось загрузить прогноз рядом');
     }
 
     return _parseWttrResponse(
-      cityName: 'Моё местоположение',
+      cityName: 'Погода рядом',
       body: response.body,
     );
   }
