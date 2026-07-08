@@ -18,6 +18,28 @@ class WeatherApi {
 
   final http.Client _client;
 
+  Future<WeatherReport> fetchWeatherByLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final uri = Uri.parse(
+      'https://wttr.in/\${latitude.toStringAsFixed(4)},\${longitude.toStringAsFixed(4)}?format=j1&lang=ru',
+    );
+
+    final response = await _client.get(uri).timeout(
+          const Duration(seconds: 12),
+        );
+
+    if (response.statusCode != 200) {
+      throw const WeatherApiException('Не удалось загрузить прогноз по геолокации');
+    }
+
+    return _parseWttrResponse(
+      cityName: 'Моё местоположение',
+      body: response.body,
+    );
+  }
+
   Future<WeatherReport> fetchWeatherByCity(String query) async {
     final cityName = query.trim();
     if (cityName.isEmpty) {
@@ -36,10 +58,21 @@ class WeatherApi {
       throw const WeatherApiException('Не удалось загрузить прогноз');
     }
 
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return _parseWttrResponse(
+      cityName: cityName,
+      body: response.body,
+    );
+  }
 
-    final currentRaw =
-        (decoded['current_condition'] as List<dynamic>).first as Map<String, dynamic>;
+
+  WeatherReport _parseWttrResponse({
+    required String cityName,
+    required String body,
+  }) {
+    final decoded = jsonDecode(body) as Map<String, dynamic>;
+
+    final currentRaw = (decoded['current_condition'] as List<dynamic>).first
+        as Map<String, dynamic>;
 
     final weatherDays = decoded['weather'] as List<dynamic>;
 

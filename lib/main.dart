@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'models/weather.dart';
 import 'services/favorite_cities_store.dart';
@@ -44,6 +45,7 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
   Future<WeatherReport>? _weatherFuture;
   List<String> _favoriteCities = const ['Москва', 'Санкт-Петербург', 'Берлин'];
   String _activeCity = 'Москва';
+  bool _isLocating = false;
 
   @override
   void initState() {
@@ -78,7 +80,67 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
     });
   }
 
-  Future<void> _toggleFavorite(String city) async {
+  Future<void> _loadWeatherForCurrentLocation() async {
+    setState(() {
+      _isLocating = true;
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw const WeatherApiException(
+          'Геолокация выключена. Включи GPS и попробуй ещё раз.',
+        );
+      }
+
+      var permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        throw const WeatherApiException(
+          'Нет разрешения на геолокацию. Разреши доступ к местоположению.',
+        );
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw const WeatherApiException(
+          'Геолокация запрещена навсегда. Включи её в настройках приложения.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _activeCity = 'Моё местоположение';
+        _searchController.text = 'Моё местоположение';
+        _weatherFuture = _api.fetchWeatherByLocation(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _weatherFuture = Future<WeatherReport>.error(error);
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _isLocating = false;
+      });
+    }
+  }
+
+
     final nextFavorites = List<String>.from(_favoriteCities);
     final existingIndex = nextFavorites.indexWhere(
       (item) => item.toLowerCase() == city.toLowerCase(),
@@ -159,6 +221,29 @@ class _WeatherHomePageState extends State<WeatherHomePage> {
                       cities: _favoriteCities,
                       activeCity: _activeCity,
                       onCityPressed: _loadWeather,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.tonalIcon(
+                        onPressed: _isLocating
+                            ? null
+                            : _loadWeatherForCurrentLocation,
+                        icon: _isLocating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.my_location_rounded),
+                        label: Text(
+                          _isLocating
+                              ? 'Определяю местоположение...'
+                              : 'Погода рядом со мной',
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -243,6 +328,12 @@ String _friendlyError(Object? error) {
   if (text.contains('Город не найден') ||
       text.contains('Введите город')) {
     return 'Не нашёл такой город. Попробуй написать название по-русски или по-английски.';
+  }
+
+  if (text.contains('Геолокация') ||
+      text.contains('местополож') ||
+      text.contains('Location')) {
+    return text.replaceFirst('Exception: ', '');
   }
 
   return text.replaceFirst('Exception: ', '');
